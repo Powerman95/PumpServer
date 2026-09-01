@@ -15,11 +15,10 @@
 // Stop button is attached to PIN 0 (IO0)
 
 #define SECONDS_PER_CYCLE (60*60*24/3)
-
 #define  PUMP_TIME (4*60)
 
 #define SECONDS_PER_CYCLE (30)
-#define  PUMP_TIME (10)
+#define  PUMP_TIME (11)
 
 /*********
   22 Sep 2024: Changed Pump time to 120 seconds from 150.
@@ -139,6 +138,7 @@ void loop(){
   struct tm timeinfo;
   struct tm nextcycle;
   static enum {STARTUP,PUMP_ON,PUMP_OFF,WAIT}PumpState = STARTUP;
+  bool StateChange = false;
 
   WiFiClient client = server.available();   // Listen for incoming clients
 
@@ -222,8 +222,8 @@ void loop(){
         } else if (c != '\r') {  // if you got anything else but a carriage return character,
           currentLine += c;      // add it to the end of the currentLine
         }
-      }
-    }
+      } //if client available
+    }   //end of while connected
     // Clear the header variable
     header = "";
     // Close the connection
@@ -244,21 +244,25 @@ void loop(){
     isrTime = lastIsrAt;    //milliseconds since startup.
     portEXIT_CRITICAL(&timerMux);
     elapsed = time(NULL) - last_cycle;
-    next_cycle = last_cycle + PUMP_TIME;
+   
     /////////////////////////////////////////////////////////////////////////////////////////
     switch(PumpState){
       case  STARTUP:
         digitalWrite(PUMP,LOW);
          Serial.printf("Startup .");
         PumpState = PUMP_ON;
+        StateChange = true;
         //Initialize timer to internet if available, or zero.
         //
         break;
       case  PUMP_ON:
-        digitalWrite(PUMP,HIGH);        
+        digitalWrite(PUMP,HIGH);
+               
           if (elapsed >= PUMP_TIME){
           PumpState = PUMP_OFF;
-          Serial.printf("Pump Off ");
+          StateChange = true;
+          next_cycle = last_cycle + SECONDS_PER_CYCLE;
+          Serial.printf("Pump Off");
         }
           else{
             PumpState = PUMP_ON;
@@ -268,13 +272,15 @@ void loop(){
         //
         break;
       case  PUMP_OFF:
+      
         digitalWrite(PUMP,LOW);
       //  Serial.printf("Pump Off ");
         if (elapsed >= SECONDS_PER_CYCLE){
             last_cycle += SECONDS_PER_CYCLE;
-            PumpState = PUMP_ON; 
+            PumpState = PUMP_ON;
+            StateChange = true; 
             Serial.printf("Pump On ");
-          
+            next_cycle = last_cycle + PUMP_TIME; 
         }
         else{
           PumpState = PUMP_OFF;
@@ -287,15 +293,19 @@ void loop(){
         PumpState = STARTUP;
     }
       /////////////////////////////////////////////////////////////////////////////////////////
-  strftime(buff, 21, "%Y-%m-%d %H:%M:%S", localtime(&last_cycle));
-    // Print information
-    Serial.print(" Last cycle began: ");
-    Serial.printf(buff);
-    Serial.print(" Elapsed: ");
-    Serial.printf("%5d",elapsed);
-    strftime(buff, 21, "%Y-%m-%d %H:%M:%S", localtime(&next_cycle));
-    Serial.printf(" Cycle End: %s", buff);
-    Serial.println();
+      if(StateChange){
+        strftime(buff, 21, "%Y-%m-%d %H:%M:%S", localtime(&last_cycle));
+        // Print information
+        Serial.print(" Last cycle began: ");
+        Serial.printf(buff);
+        Serial.print(" Elapsed: ");
+        Serial.printf("%5d",elapsed);
+        strftime(buff, 21, "%Y-%m-%d %H:%M:%S", localtime(&next_cycle));
+        Serial.printf(" Cycle End: %s", buff);
+        Serial.println();
+
+      }
+
 
 
   //  printLocalTime();
